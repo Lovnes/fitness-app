@@ -1,6 +1,4 @@
 __pycache__/
 *.pyc
-.buildozer/
-bin/
 .coverage
 .DS_Store

@@ -1,155 +1,187 @@
 @startuml class
-title FitTrack — Class Diagram
+title FitTrack — Class Diagram (React Native / TypeScript)
 skinparam classAttributeIconSize 0
 hide empty members
 
-package "fitness (domain — unit tested)" {
+package "src/domain (pure TypeScript — unit tested)" {
   enum Sex {
-    MALE
-    FEMALE
+    male
+    female
   }
   enum ActivityLevel {
-    SEDENTARY
-    LIGHT
-    MODERATE
-    ACTIVE
-    VERY_ACTIVE
-    + factor : float
+    sedentary
+    light
+    moderate
+    active
+    very_active
+  }
+  enum FitnessGoal {
+    lose_weight
+    build_muscle
+    keep_fit
+    endurance
   }
   enum ExerciseCategory {
-    STRENGTH
-    CARDIO
+    strength
+    cardio
   }
   enum SessionState {
-    NOT_STARTED
-    IN_PROGRESS
-    PAUSED
-    COMPLETED
-    CANCELLED
-    + is_terminal : bool
+    not_started
+    in_progress
+    paused
+    completed
+    cancelled
   }
 
-  class UserProfile {
-    + name : str
-    + age : int
+  class UserProfile <<immutable>> {
+    + name : string
+    + age : number  (13-100)
     + sex : Sex
-    + weight_kg : float
-    + height_cm : float
-    + activity_level : ActivityLevel
-    + daily_calorie_goal : int
-    + bmi() : float
-    + bmr() : float
-    + tdee() : float
+    + weightKg : number  (20-300)
+    + heightCm : number  (100-250)
+    + activityLevel : ActivityLevel
+    + goal : FitnessGoal
+    + dailyCalorieGoal : number
+    + dailyBurnGoal : number
   }
 
-  class Exercise <<frozen>> {
-    + id : str
-    + name : str
+  class Exercise <<immutable>> {
+    + id : string
+    + name : string
     + category : ExerciseCategory
-    + met : float
+    + met : number
+    + muscle : string
   }
 
-  class WorkoutSet <<frozen>> {
-    + reps : int  (1-100)
-    + weight_kg : float  (0-500)
+  class WorkoutSet <<immutable>> {
+    + reps : number  (1-100)
+    + weightKg : number  (0-500)
   }
 
   class ExerciseEntry {
-    + sets : List<WorkoutSet>  (max 20)
-    + cardio_minutes : float  (max 600)
-    + add_set(s : WorkoutSet)
-    + add_minutes(m : float)
-    + total_reps() : int
-    + volume() : float
-    + calories(body_kg : float) : float
-    + best_one_rep_max() : float
+    + sets : WorkoutSet[]  (max 20)
+    + cardioBlocks : number[]  (total max 600)
+    + addSet(s : WorkoutSet)
+    + addMinutes(m : number)
+    + removeLast() : boolean
+    + totalReps() : number
+    + volume() : number
+    + calories(bodyKg : number) : number
+    + bestOneRepMax() : number | null
   }
 
   class WorkoutSession {
-    + id : str
+    + id : string
     + state : SessionState
-    + body_weight_kg : float
-    - active_seconds : float
+    + bodyWeightKg : number
+    - activeMs : number
+    - undoStack : string[]
     + start()
     + pause()
     + resume()
     + finish() : WorkoutSummary
     + cancel()
-    + log_set(e : Exercise, reps : int, kg : float)
-    + log_cardio(e : Exercise, minutes : float)
-    + active_minutes : float
-    + total_reps() : int
-    + total_volume() : float
-    + total_calories() : float
+    + logSet(e : Exercise, reps, kg) : WorkoutSet
+    + logCardio(e : Exercise, minutes)
+    + undoLast() : boolean
+    + activeMinutes : number
+    + totalReps() : number
+    + totalVolume() : number
+    + totalCalories() : number
   }
 
-  class WorkoutSummary <<frozen>> {
-    + id : str
-    + date_iso : str
-    + active_minutes : float
-    + total_reps : int
-    + total_volume_kg : float
-    + calories_kcal : float
-    + exercises : List<str>
+  class WorkoutSummary <<immutable>> {
+    + id : string
+    + dateIso : string
+    + activeMinutes : number
+    + totalReps : number
+    + totalVolumeKg : number
+    + caloriesKcal : number
+    + exercises : string[]
   }
 
-  class FitnessCalculator <<utility>> {
-    + {static} bmi(kg, cm) : float
-    + {static} bmi_category(bmi) : str
-    + {static} bmr(kg, cm, age, sex) : float
-    + {static} tdee(bmr, level) : float
-    + {static} calories_burned(met, kg, min) : float
-    + {static} strength_calories(sets, met, kg) : float
-    + {static} total_reps(sets) : int
-    + {static} training_volume(sets) : float
-    + {static} one_rep_max_epley(kg, reps) : float
-    + {static} one_rep_max_brzycki(kg, reps) : float
-    + {static} calorie_balance(in, tdee, ex) : float
-    + {static} progress_percent(cur, goal) : float
+  class FitnessCalculator <<module calculations.ts>> {
+    + {static} bmi(kg, cm) : number
+    + {static} bmiCategory(bmi) : string
+    + {static} bmr(kg, cm, age, sex) : number
+    + {static} tdee(bmr, level) : number
+    + {static} recommendedIntake(tdee, goal, sex) : number
+    + {static} caloriesBurned(met, kg, min) : number
+    + {static} strengthCalories(sets, met, kg) : number
+    + {static} totalReps(sets) : number
+    + {static} trainingVolume(sets) : number
+    + {static} oneRepMaxEpley(kg, reps) : number
+    + {static} oneRepMaxBrzycki(kg, reps) : number
+    + {static} calorieBalance(in, tdee, ex) : number
+    + {static} progressPercent(cur, goal) : number
   }
 
-  class Validator <<utility>> {
+  class Validator <<module validation.ts>> {
     + {static} check(value, range) : number
     + {static} parse(text, range) : number
+    + {static} clamp(value, range) : number
   }
-  class Range <<frozen>> {
-    + name : str
+  class Range <<immutable>> {
+    + name : string
     + min : number
     + max : number
-    + integer : bool
+    + integer : boolean
   }
 
-  class JsonRepository {
-    + path : str
-    + save_profile(p : UserProfile)
-    + load_profile() : UserProfile
-    + add_workout(s : WorkoutSummary)
-    + list_workouts() : List<WorkoutSummary>
+  class ProfileFactory <<module models.ts>> {
+    + {static} createProfile(input) : UserProfile
+    + {static} profileMetrics(p) : ProfileMetrics
+    + {static} createSet(reps, kg) : WorkoutSet
   }
+
+  class Stats <<module stats.ts>> {
+    + {static} today(history, now) : DayTotal
+    + {static} lastDays(history, now, n) : DayTotal[]
+    + {static} streak(history, now) : number
+    + {static} totals(history) : Totals
+  }
+
+  interface KeyValueStore {
+    + getItem(key) : Promise<string | null>
+    + setItem(key, value) : Promise<void>
+    + removeItem(key) : Promise<void>
+  }
+
+  class Repository {
+    + saveProfile(p : UserProfile)
+    + loadProfile() : UserProfile | null
+    + addWorkout(s : WorkoutSummary)
+    + listWorkouts() : WorkoutSummary[]
+    + clearAll()
+  }
+  class MemoryStore
 }
 
-package "UI (Kivy)" {
-  class FitTrackApp {
-    + profile : UserProfile
-    + repo : JsonRepository
-    + build()
+package "src/store + src/app (React Native UI)" {
+  class AppStore <<React context>> {
+    + profile : UserProfile | null
+    + history : WorkoutSummary[]
+    + session : WorkoutSession | null
+    + draft : Draft
+    + saveProfile(p)
+    + startSession() : WorkoutSession
+    + mutate(fn)
+    + finishSession() : WorkoutSummary
+    + cancelSession()
+    + resetAll()
   }
-  class ProfileScreen {
-    + save()
-  }
-  class WorkoutScreen {
-    + on_primary()
-    + log()
-    + finish()
-    + confirm_cancel()
-  }
-  class HistoryScreen {
-    + on_pre_enter()
-  }
+  class OnboardingScreens <<routes /onboarding/*>>
+  class HomeScreen <<route /(tabs)>>
+  class WorkoutScreen <<route /(tabs)/workout>>
+  class HistoryScreen <<route /(tabs)/history>>
+  class ProfileScreen <<route /(tabs)/profile>>
+  class ExercisePicker <<route /exercise-picker>>
+  class AsyncStorage <<library>>
 }
 
 UserProfile --> Sex
 UserProfile --> ActivityLevel
+UserProfile --> FitnessGoal
 Exercise --> ExerciseCategory
 WorkoutSession --> SessionState
 WorkoutSession "1" *-- "0..*" ExerciseEntry
@@ -157,16 +189,24 @@ ExerciseEntry "1" *-- "0..20" WorkoutSet
 ExerciseEntry "0..*" --> "1" Exercise
 WorkoutSession ..> WorkoutSummary : <<create>>
 ExerciseEntry ..> FitnessCalculator : uses
-UserProfile ..> FitnessCalculator : uses
+ProfileFactory ..> FitnessCalculator : uses
+ProfileFactory ..> UserProfile : <<create>>
 FitnessCalculator ..> Validator : uses
 Validator ..> Range
-JsonRepository ..> UserProfile : persists
-JsonRepository ..> WorkoutSummary : persists
+Stats ..> WorkoutSummary
+Repository o-- KeyValueStore
+MemoryStore ..|> KeyValueStore
+AsyncStorage ..|> KeyValueStore
+Repository ..> UserProfile : persists
+Repository ..> WorkoutSummary : persists
 
-FitTrackApp o-- JsonRepository
-FitTrackApp o-- "0..1" UserProfile
-FitTrackApp *-- ProfileScreen
-FitTrackApp *-- WorkoutScreen
-FitTrackApp *-- HistoryScreen
-WorkoutScreen --> "0..1" WorkoutSession
+AppStore o-- Repository
+AppStore o-- "0..1" WorkoutSession
+OnboardingScreens ..> AppStore
+HomeScreen ..> AppStore
+HomeScreen ..> Stats
+WorkoutScreen ..> AppStore
+HistoryScreen ..> AppStore
+ProfileScreen ..> AppStore
+ExercisePicker ..> AppStore
 @enduml

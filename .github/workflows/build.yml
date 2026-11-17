@@ -8,174 +8,157 @@ on:
     branches: [main]
   workflow_dispatch:
 
+defaults:
+  run:
+    working-directory: mobile
+
 jobs:
   test:
-    name: Unit & boundary tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Ubuntu 26.04 (ubuntu-latest) only ships Python >= 3.10, so the
-          # 3.9 run (matches the local macOS Python) uses the 24.04 image.
-          - { python: "3.9",  os: ubuntu-24.04 }
-          - { python: "3.13", os: ubuntu-latest }
+    name: Typecheck, lint & unit/boundary tests
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-node@v6
         with:
-          python-version: ${{ matrix.python }}
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
-      - name: Run tests with coverage
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint src
+
+      - name: Jest (unit, boundary, state machine) with coverage
+        run: npx jest --ci --coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage
+          path: mobile/coverage/lcov-report
+
+      - name: SUS scorer tests + COCOMO size report
+        working-directory: .
         run: |
-          pip install coverage
-          coverage run --source=fitness -m unittest discover -s tests -v
-          coverage report -m --fail-under=90
-
-      - name: COCOMO size report
-        run: python tools/cocomo.py
+          python3 -m unittest discover -s tools -p "test_*.py" -v
+          python3 tools/cocomo.py
 
   # ---------------------------------------------------------------- Android --
   android:
     name: Android APK
     needs: test
-    # Buildozer / python-for-android is tested on 22.04/24.04; the new 26.04
-    # toolchain breaks some native recipes, so the image is pinned.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: write   # attach the APK to a release on tags
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-node@v6
         with:
-          python-version: "3.11"
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
       - uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: zulu
           java-version: "17"
 
-      - name: Install system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential git zip unzip autoconf automake libtool libltdl-dev \
-            pkg-config cmake zlib1g-dev libncurses-dev libffi-dev libssl-dev
-
-      - name: Install Buildozer
-        run: pip install buildozer "cython==0.29.36"
-
-      - name: Cache Buildozer toolchain (SDK, NDK, python-for-android)
-        uses: actions/cache@v4
+      - name: Cache Gradle
+        uses: actions/cache@v5
         with:
           path: |
-            ~/.buildozer
-            .buildozer
-          key: buildozer-ubuntu2404-${{ hashFiles('buildozer.spec') }}
-          restore-keys: buildozer-ubuntu2404-
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json') }}
+          restore-keys: gradle-${{ runner.os }}-
 
-      - name: Build debug APK
+      - run: npm ci
+
+      - name: Generate native Android project (Expo prebuild)
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build release APK
+        working-directory: mobile/android
         run: |
           set -o pipefail
-          # SDK licences are accepted via android.accept_sdk_license in buildozer.spec
-          buildozer -v android debug 2>&1 | tee build.log
+          ./gradlew assembleRelease --no-daemon 2>&1 | tee "$GITHUB_WORKSPACE/android-build.log"
 
       - name: Report build error
         if: failure()
-        run: |
-          [ -f build.log ] && python3 .github/scripts/report_build_error.py build.log Android || true
-
-      - name: Upload build log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-build-log
-          path: build.log
+        working-directory: .
+        run: '[ -f android-build.log ] && python3 .github/scripts/report_build_error.py android-build.log Android || true'
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: fittrack-apk
-          path: bin/*.apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Attach APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" bin/*.apk --clobber || gh release create "$GITHUB_REF_NAME" bin/*.apk --generate-notes --title "FitTrack $GITHUB_REF_NAME"
+        run: gh release upload "$GITHUB_REF_NAME" android/app/build/outputs/apk/release/*.apk --clobber || gh release create "$GITHUB_REF_NAME" android/app/build/outputs/apk/release/*.apk --generate-notes --title "FitTrack $GITHUB_REF_NAME"
 
   # -------------------------------------------------------------------- iOS --
   # Builds an UNSIGNED app for the iOS Simulator. Installing on a real iPhone
-  # needs an Apple Developer account and signing certificates (see README).
+  # needs an Apple Developer account and signing (or `eas build`).
   ios:
     name: iOS (Simulator build)
     needs: test
-    runs-on: macos-15
-    timeout-minutes: 150
-    env:
-      KIVY_IOS_DIR: ${{ github.workspace }}/../kivy-ios-build   # outside the app dir so build files aren't bundled
+    runs-on: macos-26   # Expo SDK 58 requires Xcode 26.4+
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-node@v6
         with:
-          python-version: "3.11"
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
-      - name: Install build tools
-        run: |
-          brew install autoconf automake libtool pkg-config || true
-          pip install kivy-ios "cython==0.29.36"
-          mkdir -p "$KIVY_IOS_DIR"
-
-      - name: Cache kivy-ios builds
-        uses: actions/cache@v4
+      - name: Cache CocoaPods
+        uses: actions/cache@v5
         with:
           path: |
-            ${{ github.workspace }}/../kivy-ios-build/build
-            ${{ github.workspace }}/../kivy-ios-build/dist
-          key: kivy-ios-macos15-${{ hashFiles('requirements.txt') }}
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: pods-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json') }}
+          restore-keys: pods-${{ runner.os }}-
 
-      - name: Build Python + Kivy for iOS
-        working-directory: ${{ github.workspace }}/../kivy-ios-build
-        run: |
-          set -o pipefail
-          toolchain build kivy 2>&1 | tee "$GITHUB_WORKSPACE/ios-build.log"
+      - run: npm ci
 
-      - name: Create Xcode project
-        working-directory: ${{ github.workspace }}/../kivy-ios-build
-        run: toolchain create FitTrack "$GITHUB_WORKSPACE"
+      - name: Generate native iOS project + install pods (Expo prebuild)
+        run: npx expo prebuild --platform ios
 
       - name: Compile for iOS Simulator (unsigned)
-        working-directory: ${{ github.workspace }}/../kivy-ios-build
+        working-directory: mobile/ios
         run: |
           set -o pipefail
-          xcodebuild -project fittrack-ios/fittrack.xcodeproj -scheme fittrack \
-            -configuration Debug -sdk iphonesimulator \
+          xcodebuild -workspace FitTrack.xcworkspace -scheme FitTrack \
+            -configuration Release -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build \
-            2>&1 | tee -a "$GITHUB_WORKSPACE/ios-build.log"
-          ditto -c -k --keepParent \
-            DerivedData/Build/Products/Debug-iphonesimulator/fittrack.app \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build \
+            2>&1 | tee "$GITHUB_WORKSPACE/ios-build.log"
+          ditto -c -k --keepParent build/Build/Products/Release-iphonesimulator/FitTrack.app \
             "$GITHUB_WORKSPACE/FitTrack-simulator.app.zip"
 
       - name: Report build error
         if: failure()
-        run: |
-          [ -f ios-build.log ] && python3 .github/scripts/report_build_error.py ios-build.log iOS || true
-
-      - name: Upload build log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-log
-          path: ios-build.log
+        working-directory: .
+        run: '[ -f ios-build.log ] && python3 .github/scripts/report_build_error.py ios-build.log iOS || true'
 
       - name: Upload Simulator app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: fittrack-ios-simulator
           path: FitTrack-simulator.app.zip

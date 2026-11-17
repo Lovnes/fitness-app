@@ -1,4 +1,0 @@
-# Runtime (mobile UI). The fitness/ core and tests need only the standard library.
-kivy==2.3.0
-# Packaging for Android (run on macOS/Linux):
-# buildozer

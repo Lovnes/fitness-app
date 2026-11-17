@@ -1,9 +1,9 @@
 """Turn a failed build log into readable GitHub error annotations.
 
-Buildozer ends a failed build with a long environment dump, which pushes the
+Build tools (Gradle, xcodebuild) end a failed build with long noise, which pushes the
 real error out of view (and annotations are capped at ~4 KB each). This
 script strips ANSI colours, drops the environment dump, finds the context
-just before "Command failed" / "BUILD FAILED" / "error:", and emits it as a
+just before "FAILURE: Build failed" / "** BUILD FAILED **" / "error:", and emits it as a
 few annotations that fit the size limit.
 
 Usage: python3 report_build_error.py <log file> [label]
@@ -12,7 +12,8 @@ import re
 import sys
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
-MARKERS = ("Command failed", "BUILD FAILED", "[ERROR]", "Error:", "error:", "** BUILD FAILED **")
+ANCHORS = ("Command failed", "** BUILD FAILED **", "FAILURE: Build failed", "* What went wrong:")
+MARKERS = ("BUILD FAILED", "[ERROR]", "Error:", "error:", "e: ")
 CONTEXT_LINES = 120
 CHUNK = 3800
 MAX_ANNOTATIONS = 8
@@ -37,7 +38,7 @@ def clean(lines):
 def context(lines):
     anchor = None
     for i in range(len(lines) - 1, -1, -1):
-        if "Command failed" in lines[i] or "** BUILD FAILED **" in lines[i]:
+        if any(a in lines[i] for a in ANCHORS):
             anchor = i
             break
     if anchor is None:

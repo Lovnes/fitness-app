@@ -1,70 +1,71 @@
 # FitTrack — Fitness & Workout Tracking App
 
-A small, offline-first mobile app for logging workouts. It calculates calories burned, reps, training volume, an estimated 1-rep max, and BMI/BMR/TDEE. It is built by a single developer using the Personal Software Process.
+FitTrack is an offline-first mobile app for logging workouts. It calculates calories burned, reps, training volume, an estimated 1-rep max, BMI, BMR and TDEE, and recommends a daily calorie target based on your goal. It is built by a single developer using the Personal Software Process.
 
 | | |
 |---|---|
-| Platform | Mobile: Python 3.9+ with **Kivy 2.3** (Android via Buildozer; also runs on desktop) |
-| Testing | **Unit** (calorie/rep calculations) · **Boundary value** · **Usability** · state-transition |
+| Platform | **React Native 0.88 + Expo SDK 58** (TypeScript, Expo Router). Runs on Android, iOS and web. |
+| Testing | **Unit** (calorie/rep calculations) · **Boundary value** · **Usability** · state-transition: 221 Jest cases |
 | UML | **Use Case · Class · Activity · State** |
 | Estimation | **Basic COCOMO** (organic) |
-| Process | **PSP** (time/defect logs, PROBE-style size estimate, review checklists) |
+| Process | **PSP** (time and defect logs, size measurement, review checklists) |
 
 <p>
-<img src="docs/screenshots/2_profile_saved.png" width="200">
-<img src="docs/screenshots/3_workout.png" width="200">
-<img src="docs/screenshots/4_history.png" width="200">
+<img src="docs/screenshots/03_age.png" width="160">
+<img src="docs/screenshots/04_weight.png" width="160">
+<img src="docs/screenshots/06_level.png" width="160">
+<img src="docs/screenshots/17_home.png" width="160">
+<img src="docs/screenshots/14_workout_active.png" width="160">
 </p>
 
 ## Quick start
 
+Requires Node 22.13+.
+
 ```bash
-# Tests: standard library only, no install needed
-python3 -m unittest discover -s tests -v
+cd mobile
+npm install
 
-# Run the app
-python3 -m pip install -r requirements.txt
-python3 main.py
+npm test                 # 221 Jest cases: unit, boundary, state machine
+npm run typecheck        # tsc --noEmit
+npx expo start           # scan the QR code with Expo Go, or press a / i / w
+```
 
-# Build an Android APK (macOS/Linux)
-pip install buildozer && buildozer android debug
+To build installable apps, push to GitHub: [.github/workflows/build.yml](.github/workflows/build.yml) produces an Android **APK** and an iOS **Simulator app** as run artifacts. To build locally instead:
 
-# Build for iOS (macOS + Xcode)
-#   (run outside the app folder so build files aren't bundled into the app)
-pip install kivy-ios && mkdir ../ios-build && cd ../ios-build
-toolchain build kivy && toolchain create FitTrack "../fitness app"
-open fittrack-ios/fittrack.xcodeproj   # run on Simulator, or sign to run on an iPhone
+```bash
+npx expo run:android     # needs Android Studio + JDK 17
+npx expo run:ios         # needs Xcode 26.4+
+```
 
-# Cost estimate from the measured code size
-python3 tools/cocomo.py
+Other tools:
+
+```bash
+python3 tools/cocomo.py                                   # COCOMO from the measured code size
+python3 tools/sus_score.py docs/usability/sus_responses.csv   # usability questionnaire scores
 ```
 
 ## Project structure
 
 ```
-main.py                  Kivy UI: Profile, Workout, History screens
-fitness/
-  calculations.py        calorie / rep / 1RM / BMI / BMR / TDEE (pure functions)
-  validation.py          valid ranges for every input (source of boundary tests)
-  models.py              UserProfile, Exercise, WorkoutSet, ExerciseEntry, WorkoutSummary
-  session.py             WorkoutSession state machine
-  storage.py             atomic JSON persistence
-  exercises.py           built-in exercises with MET values
-  enums.py
-tests/                   60 automated tests (unit, boundary, state, storage, SUS)
-tools/
-  cocomo.py              Basic COCOMO calculator + SLOC counter
-  sus_score.py           System Usability Scale scorer
-docs/
-  01_Requirements.md     scope, FR/NFR, use case descriptions
-  02_UML.md              all four diagrams (Mermaid) + design rationale
-  uml/*.puml             PlantUML sources (authoritative diagrams)
-  03_COCOMO.md           planned vs actual estimate, v2 scenario
-  04_PSP.md              PSP plan, defect log, checklists, PIPs
-  05_Testing.md          unit cases, BVA tables, usability test plan, heuristic review
-  psp/*.csv              time and defect logs
-  usability/             SUS response sheet
-  screenshots/
+mobile/                         Expo / React Native app
+  src/app/                      screens (Expo Router: every file is a route)
+    onboarding/                 welcome + 7-step assessment (gender, age wheel,
+                                weight/height rulers, level gauge, goal, summary)
+    (tabs)/                     Home · Workout · History · Profile
+    exercise-picker.tsx         search screen with filters + "Not Found" state
+  src/components/               ui primitives, pickers, SVG visuals, tab bar, sheets
+  src/domain/                   pure TypeScript business logic (no React)
+    calculations.ts             calorie / rep / 1RM / BMI / BMR / TDEE / intake
+    validation.ts               valid ranges for every input (source of boundary tests)
+    models.ts                   UserProfile, Exercise, WorkoutSet, ExerciseEntry, WorkoutSummary
+    session.ts                  WorkoutSession state machine (+ undo)
+    storage.ts                  Repository over AsyncStorage
+    stats.ts                    today / last-7-days / streak aggregations
+    __tests__/                  Jest tests
+  src/store/AppStore.tsx        React context: profile, history, active session
+tools/                          cocomo.py, sus_score.py (+ tests)
+docs/                           requirements, UML, COCOMO, PSP, testing, screenshots
 ```
 
 ## Key formulas
@@ -77,3 +78,4 @@ docs/
 | 1RM (Epley) | w × (1 + reps/30), valid for 1–12 reps |
 | BMR (Mifflin-St Jeor) | 10·kg + 6.25·cm − 5·age + 5 (male) / −161 (female) |
 | TDEE | BMR × activity factor (1.2 – 1.9) |
+| Daily target | TDEE + goal adjustment (−500 / +300 / 0 / +200), rounded to 10, min 1200 ♀ / 1500 ♂ |

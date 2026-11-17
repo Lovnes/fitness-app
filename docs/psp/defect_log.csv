@@ -2,3 +2,8 @@ number,date,type,phase_injected,phase_removed,fix_time_min,fix_ref,description
 D-01,2026-11-17,60 Checking,Code,Test,,,"Stale assertion left in test_cardio_cumulative_duration_cap after rewriting the test"
 D-02,2026-11-17,70 Data,Design,Test,,,"Double rounding: summary rounded calories to 1 dp then UI rounded again (half-even) -> live 329 kcal vs saved 328 kcal"
 D-03,2026-11-17,80 Function,Design,Test,,,"Profile validation error rendered below Save button and off-screen on phone-sized display"
+D-04,2026-11-17,50 Interface,Code,Compile,,,"Used APIs removed in React Native 0.88 / Expo Router 58 (ScrollView ref type, tab bar navigation prop, StyleSheet.absoluteFillObject) - caught by tsc"
+D-05,2026-11-17,80 Function,Code,Code review,,,"React Compiler lint: setState in useEffect, ref.current read during render, non-simple hook deps - caught by eslint"
+D-06,2026-11-17,80 Function,Design,Test,,,"Reps/weight steppers side by side overflowed 390px screen causing horizontal scroll on Workout"
+D-07,2026-11-17,80 Function,Code,Test,,,"Home header collapsed on web: SafeAreaView flex:0 inside ScrollView"
+D-08,2026-11-17,80 Function,Design,Test,,,"Selected filter chip invisible (orange on orange search header)"

@@ -8,20 +8,24 @@ actor "User" as user
 actor "Device Storage" as store <<system>>
 
 rectangle "FitTrack Mobile App" {
-  usecase "UC1 Manage Profile" as UC1
-  usecase "UC2 View Body Metrics\n(BMI, BMR, TDEE)" as UC2
+  usecase "UC1 Complete / Edit Assessment" as UC1
+  usecase "UC2 View Body Metrics\n(BMI, BMR, TDEE, target)" as UC2
   usecase "UC3 Start Workout" as UC3
   usecase "UC4 Log Strength Set\n(reps x weight)" as UC4
   usecase "UC5 Log Cardio Activity\n(minutes)" as UC5
   usecase "UC6 Pause / Resume Workout" as UC6
   usecase "UC7 Finish Workout" as UC7
   usecase "UC8 Cancel Workout" as UC8
-  usecase "UC9 View Workout History" as UC9
+  usecase "UC9 View History & Dashboard" as UC9
+  usecase "UC10 Search Exercise" as UC10
+  usecase "UC11 Undo Last Entry" as UC11
 
   usecase "Validate Input" as VAL
   usecase "Calculate Calories" as CAL
   usecase "Calculate Reps & Volume" as REP
   usecase "Estimate 1-Rep Max" as ORM
+  usecase "Recommend Calorie Target" as TGT
+  usecase "Confirm Action" as CONF
   usecase "Save Workout Summary" as SAVE
 }
 
@@ -34,15 +38,21 @@ user --> UC6
 user --> UC7
 user --> UC8
 user --> UC9
+user --> UC10
+user --> UC11
 
 UC1 ..> VAL : <<include>>
 UC1 ..> UC2 : <<include>>
+UC2 ..> TGT : <<include>>
 UC4 ..> VAL : <<include>>
 UC4 ..> REP : <<include>>
 UC4 ..> CAL : <<include>>
 UC5 ..> VAL : <<include>>
 UC5 ..> CAL : <<include>>
 ORM ..> UC4 : <<extend>>\n[load > 0 and reps <= 12]
+UC10 ..> UC4 : <<extend>>\n[change exercise]
+UC7 ..> CONF : <<include>>
+UC8 ..> CONF : <<include>>
 UC7 ..> SAVE : <<include>>
 
 SAVE --> store

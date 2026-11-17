@@ -2,24 +2,26 @@
 title FitTrack — State Machine Diagram: WorkoutSession
 hide empty description
 
-[*] --> NotStarted : new WorkoutSession(body_kg)
+[*] --> NotStarted : new WorkoutSession(bodyWeightKg)
 
 NotStarted --> InProgress : start() / start timer
 NotStarted --> Cancelled : cancel()
 
 InProgress : entry / timer running
-InProgress : log_set(ex, reps, kg) / validate, add set, recalc
-InProgress : log_cardio(ex, min) / validate, add minutes, recalc
+InProgress : logSet(ex, reps, kg) / validate, add set, push undo
+InProgress : logCardio(ex, min) / validate, add block, push undo
+InProgress : undoLast() [undo stack not empty] / remove last entry
 InProgress : exit / bank elapsed time
 
 Paused : entry / timer stopped
-Paused : log_set / reject (InvalidTransition)
+Paused : logSet / reject (InvalidTransition)
+Paused : undoLast() [undo stack not empty] / remove last entry
 
 InProgress --> Paused : pause()
 Paused --> InProgress : resume() / restart timer
 
-InProgress --> Completed : finish() [has logged work] / build summary, save
-Paused --> Completed : finish() [has logged work] / build summary, save
+InProgress --> Completed : finish() [has logged work, user confirmed] / build summary, save
+Paused --> Completed : finish() [has logged work, user confirmed] / build summary, save
 InProgress --> InProgress : finish() [no logged work] / show error
 
 InProgress --> Cancelled : cancel() [user confirms]
@@ -31,7 +33,7 @@ Cancelled --> [*]
 note right of Completed
   Terminal states: every further event
   raises InvalidTransition.
-  Verified by tests/test_session_state.py
+  Verified by src/domain/__tests__/session.test.ts
   (all 5 states x 5 events = 25 pairs).
 end note
 @enduml

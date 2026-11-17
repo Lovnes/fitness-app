@@ -10,9 +10,7 @@ Usage:
     python3 tools/cocomo.py --cost 3000     # add cost at <amount> per person-month
 """
 import argparse
-import io
 import os
-import tokenize
 
 MODES = {
     #               a     b     c     d
@@ -22,8 +20,8 @@ MODES = {
 }
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRODUCT = ["main.py", "fitness"]
-TEST = ["tests"]
+SRC = os.path.join("mobile", "src")
+EXTS = (".ts", ".tsx")
 
 
 def estimate(kloc, mode="organic"):
@@ -34,33 +32,44 @@ def estimate(kloc, mode="organic"):
 
 
 def sloc(path):
-    """Physical source lines excluding blanks, comments and docstrings."""
-    with open(path, "rb") as fh:
-        src = fh.read().decode("utf-8")
-    code_lines = set()
-    prev = tokenize.INDENT
-    for tok in tokenize.generate_tokens(io.StringIO(src).readline):
-        if tok.type in (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE,
-                        tokenize.INDENT, tokenize.DEDENT, tokenize.ENDMARKER):
-            prev = tok.type if tok.type != tokenize.COMMENT else prev
-            continue
-        is_docstring = tok.type == tokenize.STRING and prev in (
-            tokenize.INDENT, tokenize.NEWLINE, tokenize.DEDENT)
-        if not is_docstring:
-            code_lines.update(range(tok.start[0], tok.end[0] + 1))
-        prev = tok.type
-    return len(code_lines)
+    """Physical source lines excluding blanks and comments (// and /* */)."""
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    count, in_block = 0, False
+    for line in text.splitlines():
+        code = ""
+        i = 0
+        while i < len(line):
+            if in_block:
+                j = line.find("*/", i)
+                if j < 0:
+                    i = len(line)
+                else:
+                    in_block, i = False, j + 2
+            elif line.startswith("/*", i):
+                in_block, i = True, i + 2
+            elif line.startswith("//", i):
+                break
+            else:
+                code += line[i]
+                i += 1
+        if code.strip():
+            count += 1
+    return count
 
 
-def count(targets):
+def count(tests):
+    """Rows of (relative path, SLOC) for product code (tests=False) or test code (tests=True)."""
     rows = []
-    for target in targets:
-        full = os.path.join(ROOT, target)
-        files = [full] if os.path.isfile(full) else [
-            os.path.join(dp, f) for dp, _, fs in os.walk(full) for f in fs if f.endswith(".py")]
-        for f in sorted(files):
-            rows.append((os.path.relpath(f, ROOT), sloc(f)))
-    return rows
+    for dp, _, fs in os.walk(os.path.join(ROOT, SRC)):
+        is_test = "__tests__" in dp.split(os.sep)
+        if is_test != tests:
+            continue
+        for f in sorted(fs):
+            if f.endswith(EXTS):
+                full = os.path.join(dp, f)
+                rows.append((os.path.relpath(full, os.path.join(ROOT, SRC)), sloc(full)))
+    return sorted(rows)
 
 
 def main():
@@ -70,13 +79,13 @@ def main():
     args = ap.parse_args()
 
     if args.kloc is None:
-        product, tests = count(PRODUCT), count(TEST)
-        print("Measured size (non-blank, non-comment, non-docstring lines)")
+        product, tests = count(False), count(True)
+        print("Measured size of mobile/src (non-blank, non-comment lines)")
         for name, n in product:
-            print(f"  {name:<28}{n:>6}")
+            print(f"  {name:<34}{n:>6}")
         p_total, t_total = sum(n for _, n in product), sum(n for _, n in tests)
-        print(f"  {'PRODUCT TOTAL':<28}{p_total:>6}")
-        print(f"  {'(test code, not estimated)':<28}{t_total:>6}\n")
+        print(f"  {'PRODUCT TOTAL':<34}{p_total:>6}")
+        print(f"  {'(test code, not estimated)':<34}{t_total:>6}\n")
         kloc = p_total / 1000
     else:
         kloc = args.kloc

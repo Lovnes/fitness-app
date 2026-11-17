@@ -8,12 +8,12 @@ start
 if (Profile saved?) then (no)
   repeat
     |User|
-    :Enter age, weight, height,\nsex, activity level;
+    :Answer assessment: gender, age (wheel),\nweight & height (rulers), level (gauge), goal;
     |App|
-    :Validate against ranges;
+    :Pickers clamp to valid ranges;\nvalidate on save;
   repeat while (All values valid?) is (no / show inline error)
   ->yes;
-  :Compute BMI, BMR, TDEE;
+  :Compute BMI, BMR, TDEE,\nrecommended calorie target;
   :Save profile;
 else (yes)
 endif
@@ -25,11 +25,11 @@ endif
 
 repeat
   |User|
-  :Select exercise;
+  :Select exercise\n(search + Strength/Cardio filter);
   if (Category?) then (strength)
-    :Enter reps and weight;
+    :Set reps and weight\nwith steppers;
   else (cardio)
-    :Enter minutes;
+    :Set minutes with stepper;
   endif
   |App|
   if (Input valid?) then (yes)
@@ -43,7 +43,14 @@ repeat
     end fork
     :Refresh totals on screen;
   else (no)
-    :Show error message;
+    :Show error banner\nnext to Log button;
+  endif
+  |User|
+  if (Logged by mistake?) then (yes)
+    :Tap Undo;
+    |App|
+    :Remove last set / block,\nrecalculate totals;
+  else (no)
   endif
   |User|
   if (Need a break?) then (yes)
@@ -71,6 +78,13 @@ if (Finish or Cancel?) then (Cancel)
     detach
   endif
 else (Finish)
+  |App|
+  :Show summary sheet\n(reps, kcal, time);
+  |User|
+  if (Finish & save?) then (Keep going)
+    detach
+  else (confirm)
+  endif
   |App|
   if (At least one set or\ncardio block logged?) then (no)
     :Show "Log at least one set";
