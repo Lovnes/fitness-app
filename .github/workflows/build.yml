@@ -15,10 +15,15 @@ concurrency:
 jobs:
   test:
     name: Unit & boundary tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python: ["3.9", "3.12"]
+        include:
+          # Ubuntu 26.04 (ubuntu-latest) only ships Python >= 3.10, so the
+          # 3.9 run (matches the local macOS Python) uses the 24.04 image.
+          - { python: "3.9",  os: ubuntu-24.04 }
+          - { python: "3.13", os: ubuntu-latest }
     steps:
       - uses: actions/checkout@v4
 
