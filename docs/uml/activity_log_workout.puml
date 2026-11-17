@@ -1,0 +1,85 @@
+@startuml activity_log_workout
+title FitTrack — Activity Diagram: Record a Workout
+
+|User|
+start
+:Open app;
+|App|
+if (Profile saved?) then (no)
+  repeat
+    |User|
+    :Enter age, weight, height,\nsex, activity level;
+    |App|
+    :Validate against ranges;
+  repeat while (All values valid?) is (no / show inline error)
+  ->yes;
+  :Compute BMI, BMR, TDEE;
+  :Save profile;
+else (yes)
+endif
+
+|User|
+:Tap "Start workout";
+|App|
+:Create WorkoutSession(body weight)\nstate = IN_PROGRESS, start timer;
+
+repeat
+  |User|
+  :Select exercise;
+  if (Category?) then (strength)
+    :Enter reps and weight;
+  else (cardio)
+    :Enter minutes;
+  endif
+  |App|
+  if (Input valid?) then (yes)
+    :Add set / minutes to ExerciseEntry;
+    fork
+      :Recalculate total reps\nand volume;
+    fork again
+      :Recalculate calories\n(MET x 3.5 x kg / 200 x min);
+    fork again
+      :Update est. 1RM\n(if load > 0, reps <= 12);
+    end fork
+    :Refresh totals on screen;
+  else (no)
+    :Show error message;
+  endif
+  |User|
+  if (Need a break?) then (yes)
+    :Tap Pause;
+    |App|
+    :Stop timer (state = PAUSED);
+    |User|
+    :Tap Resume;
+    |App|
+    :Restart timer (state = IN_PROGRESS);
+  else (no)
+  endif
+  |User|
+repeat while (More exercises?) is (yes)
+->no;
+
+if (Finish or Cancel?) then (Cancel)
+  |App|
+  :Ask for confirmation;
+  if (Discard?) then (yes)
+    :state = CANCELLED;
+    stop
+  else (no)
+    :Return to logging;
+    detach
+  endif
+else (Finish)
+  |App|
+  if (At least one set or\ncardio block logged?) then (no)
+    :Show "Log at least one set";
+    detach
+  else (yes)
+    :state = COMPLETED\nbuild WorkoutSummary;
+    :Save summary to device storage;
+    :Show totals, history updated;
+  endif
+endif
+stop
+@enduml

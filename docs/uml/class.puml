@@ -1,0 +1,172 @@
+@startuml class
+title FitTrack — Class Diagram
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "fitness (domain — unit tested)" {
+  enum Sex {
+    MALE
+    FEMALE
+  }
+  enum ActivityLevel {
+    SEDENTARY
+    LIGHT
+    MODERATE
+    ACTIVE
+    VERY_ACTIVE
+    + factor : float
+  }
+  enum ExerciseCategory {
+    STRENGTH
+    CARDIO
+  }
+  enum SessionState {
+    NOT_STARTED
+    IN_PROGRESS
+    PAUSED
+    COMPLETED
+    CANCELLED
+    + is_terminal : bool
+  }
+
+  class UserProfile {
+    + name : str
+    + age : int
+    + sex : Sex
+    + weight_kg : float
+    + height_cm : float
+    + activity_level : ActivityLevel
+    + daily_calorie_goal : int
+    + bmi() : float
+    + bmr() : float
+    + tdee() : float
+  }
+
+  class Exercise <<frozen>> {
+    + id : str
+    + name : str
+    + category : ExerciseCategory
+    + met : float
+  }
+
+  class WorkoutSet <<frozen>> {
+    + reps : int  (1-100)
+    + weight_kg : float  (0-500)
+  }
+
+  class ExerciseEntry {
+    + sets : List<WorkoutSet>  (max 20)
+    + cardio_minutes : float  (max 600)
+    + add_set(s : WorkoutSet)
+    + add_minutes(m : float)
+    + total_reps() : int
+    + volume() : float
+    + calories(body_kg : float) : float
+    + best_one_rep_max() : float
+  }
+
+  class WorkoutSession {
+    + id : str
+    + state : SessionState
+    + body_weight_kg : float
+    - active_seconds : float
+    + start()
+    + pause()
+    + resume()
+    + finish() : WorkoutSummary
+    + cancel()
+    + log_set(e : Exercise, reps : int, kg : float)
+    + log_cardio(e : Exercise, minutes : float)
+    + active_minutes : float
+    + total_reps() : int
+    + total_volume() : float
+    + total_calories() : float
+  }
+
+  class WorkoutSummary <<frozen>> {
+    + id : str
+    + date_iso : str
+    + active_minutes : float
+    + total_reps : int
+    + total_volume_kg : float
+    + calories_kcal : float
+    + exercises : List<str>
+  }
+
+  class FitnessCalculator <<utility>> {
+    + {static} bmi(kg, cm) : float
+    + {static} bmi_category(bmi) : str
+    + {static} bmr(kg, cm, age, sex) : float
+    + {static} tdee(bmr, level) : float
+    + {static} calories_burned(met, kg, min) : float
+    + {static} strength_calories(sets, met, kg) : float
+    + {static} total_reps(sets) : int
+    + {static} training_volume(sets) : float
+    + {static} one_rep_max_epley(kg, reps) : float
+    + {static} one_rep_max_brzycki(kg, reps) : float
+    + {static} calorie_balance(in, tdee, ex) : float
+    + {static} progress_percent(cur, goal) : float
+  }
+
+  class Validator <<utility>> {
+    + {static} check(value, range) : number
+    + {static} parse(text, range) : number
+  }
+  class Range <<frozen>> {
+    + name : str
+    + min : number
+    + max : number
+    + integer : bool
+  }
+
+  class JsonRepository {
+    + path : str
+    + save_profile(p : UserProfile)
+    + load_profile() : UserProfile
+    + add_workout(s : WorkoutSummary)
+    + list_workouts() : List<WorkoutSummary>
+  }
+}
+
+package "UI (Kivy)" {
+  class FitTrackApp {
+    + profile : UserProfile
+    + repo : JsonRepository
+    + build()
+  }
+  class ProfileScreen {
+    + save()
+  }
+  class WorkoutScreen {
+    + on_primary()
+    + log()
+    + finish()
+    + confirm_cancel()
+  }
+  class HistoryScreen {
+    + on_pre_enter()
+  }
+}
+
+UserProfile --> Sex
+UserProfile --> ActivityLevel
+Exercise --> ExerciseCategory
+WorkoutSession --> SessionState
+WorkoutSession "1" *-- "0..*" ExerciseEntry
+ExerciseEntry "1" *-- "0..20" WorkoutSet
+ExerciseEntry "0..*" --> "1" Exercise
+WorkoutSession ..> WorkoutSummary : <<create>>
+ExerciseEntry ..> FitnessCalculator : uses
+UserProfile ..> FitnessCalculator : uses
+FitnessCalculator ..> Validator : uses
+Validator ..> Range
+JsonRepository ..> UserProfile : persists
+JsonRepository ..> WorkoutSummary : persists
+
+FitTrackApp o-- JsonRepository
+FitTrackApp o-- "0..1" UserProfile
+FitTrackApp *-- ProfileScreen
+FitTrackApp *-- WorkoutScreen
+FitTrackApp *-- HistoryScreen
+WorkoutScreen --> "0..1" WorkoutSession
+@enduml

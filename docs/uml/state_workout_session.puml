@@ -1,0 +1,37 @@
+@startuml state_workout_session
+title FitTrack — State Machine Diagram: WorkoutSession
+hide empty description
+
+[*] --> NotStarted : new WorkoutSession(body_kg)
+
+NotStarted --> InProgress : start() / start timer
+NotStarted --> Cancelled : cancel()
+
+InProgress : entry / timer running
+InProgress : log_set(ex, reps, kg) / validate, add set, recalc
+InProgress : log_cardio(ex, min) / validate, add minutes, recalc
+InProgress : exit / bank elapsed time
+
+Paused : entry / timer stopped
+Paused : log_set / reject (InvalidTransition)
+
+InProgress --> Paused : pause()
+Paused --> InProgress : resume() / restart timer
+
+InProgress --> Completed : finish() [has logged work] / build summary, save
+Paused --> Completed : finish() [has logged work] / build summary, save
+InProgress --> InProgress : finish() [no logged work] / show error
+
+InProgress --> Cancelled : cancel() [user confirms]
+Paused --> Cancelled : cancel() [user confirms]
+
+Completed --> [*]
+Cancelled --> [*]
+
+note right of Completed
+  Terminal states: every further event
+  raises InvalidTransition.
+  Verified by tests/test_session_state.py
+  (all 5 states x 5 events = 25 pairs).
+end note
+@enduml

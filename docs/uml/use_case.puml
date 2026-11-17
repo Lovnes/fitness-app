@@ -1,0 +1,51 @@
+@startuml use_case
+title FitTrack — Use Case Diagram
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "User" as user
+actor "Device Storage" as store <<system>>
+
+rectangle "FitTrack Mobile App" {
+  usecase "UC1 Manage Profile" as UC1
+  usecase "UC2 View Body Metrics\n(BMI, BMR, TDEE)" as UC2
+  usecase "UC3 Start Workout" as UC3
+  usecase "UC4 Log Strength Set\n(reps x weight)" as UC4
+  usecase "UC5 Log Cardio Activity\n(minutes)" as UC5
+  usecase "UC6 Pause / Resume Workout" as UC6
+  usecase "UC7 Finish Workout" as UC7
+  usecase "UC8 Cancel Workout" as UC8
+  usecase "UC9 View Workout History" as UC9
+
+  usecase "Validate Input" as VAL
+  usecase "Calculate Calories" as CAL
+  usecase "Calculate Reps & Volume" as REP
+  usecase "Estimate 1-Rep Max" as ORM
+  usecase "Save Workout Summary" as SAVE
+}
+
+user --> UC1
+user --> UC2
+user --> UC3
+user --> UC4
+user --> UC5
+user --> UC6
+user --> UC7
+user --> UC8
+user --> UC9
+
+UC1 ..> VAL : <<include>>
+UC1 ..> UC2 : <<include>>
+UC4 ..> VAL : <<include>>
+UC4 ..> REP : <<include>>
+UC4 ..> CAL : <<include>>
+UC5 ..> VAL : <<include>>
+UC5 ..> CAL : <<include>>
+ORM ..> UC4 : <<extend>>\n[load > 0 and reps <= 12]
+UC7 ..> SAVE : <<include>>
+
+SAVE --> store
+UC1 --> store
+UC9 --> store
+@enduml

@@ -1,0 +1,4 @@
+number,date,type,phase_injected,phase_removed,fix_time_min,fix_ref,description
+D-01,2026-11-17,60 Checking,Code,Test,,,"Stale assertion left in test_cardio_cumulative_duration_cap after rewriting the test"
+D-02,2026-11-17,70 Data,Design,Test,,,"Double rounding: summary rounded calories to 1 dp then UI rounded again (half-even) -> live 329 kcal vs saved 328 kcal"
+D-03,2026-11-17,80 Function,Design,Test,,,"Profile validation error rendered below Save button and off-screen on phone-sized display"
