@@ -8,10 +8,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   test:
     name: Unit & boundary tests
@@ -90,9 +86,7 @@ jobs:
       - name: Report build error
         if: failure()
         run: |
-          [ -f build.log ] || exit 0
-          msg=$(tail -n 80 build.log | python3 -c "import sys; print(sys.stdin.read().replace('%','%25').replace('\r','').replace('\n','%0A'))")
-          echo "::error title=Buildozer failed (last 80 lines)::$msg"
+          [ -f build.log ] && python3 .github/scripts/report_build_error.py build.log Android || true
 
       - name: Upload build log
         if: failure()
@@ -171,9 +165,7 @@ jobs:
       - name: Report build error
         if: failure()
         run: |
-          [ -f ios-build.log ] || exit 0
-          msg=$(tail -n 80 ios-build.log | python3 -c "import sys; print(sys.stdin.read().replace('%','%25').replace('\r','').replace('\n','%0A'))")
-          echo "::error title=iOS build failed (last 80 lines)::$msg"
+          [ -f ios-build.log ] && python3 .github/scripts/report_build_error.py ios-build.log iOS || true
 
       - name: Upload build log
         if: failure()
