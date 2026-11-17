@@ -25,9 +25,9 @@ jobs:
           - { python: "3.9",  os: ubuntu-24.04 }
           - { python: "3.13", os: ubuntu-latest }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
 
@@ -40,21 +40,24 @@ jobs:
       - name: COCOMO size report
         run: python tools/cocomo.py
 
+  # ---------------------------------------------------------------- Android --
   android:
     name: Android APK
     needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Buildozer / python-for-android is tested on 22.04/24.04; the new 26.04
+    # toolchain breaks some native recipes, so the image is pinned.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
     permissions:
-      contents: write   # needed to attach the APK to a release on tags
+      contents: write   # attach the APK to a release on tags
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -63,8 +66,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            git zip unzip autoconf automake libtool pkg-config cmake \
-            zlib1g-dev libncurses-dev libffi-dev libssl-dev
+            build-essential git zip unzip autoconf automake libtool libltdl-dev \
+            pkg-config cmake zlib1g-dev libncurses-dev libffi-dev libssl-dev
 
       - name: Install Buildozer
         run: pip install buildozer "cython==0.29.36"
@@ -75,11 +78,28 @@ jobs:
           path: |
             ~/.buildozer
             .buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: buildozer-${{ runner.os }}-
+          key: buildozer-ubuntu2404-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-ubuntu2404-
 
       - name: Build debug APK
-        run: yes | buildozer -v android debug
+        run: |
+          set -o pipefail
+          # SDK licences are accepted via android.accept_sdk_license in buildozer.spec
+          buildozer -v android debug 2>&1 | tee build.log
+
+      - name: Report build error
+        if: failure()
+        run: |
+          [ -f build.log ] || exit 0
+          msg=$(tail -n 80 build.log | python3 -c "import sys; print(sys.stdin.read().replace('%','%25').replace('\r','').replace('\n','%0A'))")
+          echo "::error title=Buildozer failed (last 80 lines)::$msg"
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-log
+          path: build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -92,4 +112,79 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" bin/*.apk --generate-notes --title "FitTrack $GITHUB_REF_NAME"
+        run: gh release upload "$GITHUB_REF_NAME" bin/*.apk --clobber || gh release create "$GITHUB_REF_NAME" bin/*.apk --generate-notes --title "FitTrack $GITHUB_REF_NAME"
+
+  # -------------------------------------------------------------------- iOS --
+  # Builds an UNSIGNED app for the iOS Simulator. Installing on a real iPhone
+  # needs an Apple Developer account and signing certificates (see README).
+  ios:
+    name: iOS (Simulator build)
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 150
+    env:
+      KIVY_IOS_DIR: ${{ github.workspace }}/../kivy-ios-build   # outside the app dir so build files aren't bundled
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: |
+          brew install autoconf automake libtool pkg-config || true
+          pip install kivy-ios "cython==0.29.36"
+          mkdir -p "$KIVY_IOS_DIR"
+
+      - name: Cache kivy-ios builds
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/../kivy-ios-build/build
+            ${{ github.workspace }}/../kivy-ios-build/dist
+          key: kivy-ios-macos15-${{ hashFiles('requirements.txt') }}
+
+      - name: Build Python + Kivy for iOS
+        working-directory: ${{ github.workspace }}/../kivy-ios-build
+        run: |
+          set -o pipefail
+          toolchain build kivy 2>&1 | tee "$GITHUB_WORKSPACE/ios-build.log"
+
+      - name: Create Xcode project
+        working-directory: ${{ github.workspace }}/../kivy-ios-build
+        run: toolchain create FitTrack "$GITHUB_WORKSPACE"
+
+      - name: Compile for iOS Simulator (unsigned)
+        working-directory: ${{ github.workspace }}/../kivy-ios-build
+        run: |
+          set -o pipefail
+          xcodebuild -project fittrack-ios/fittrack.xcodeproj -scheme fittrack \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build \
+            2>&1 | tee -a "$GITHUB_WORKSPACE/ios-build.log"
+          ditto -c -k --keepParent \
+            DerivedData/Build/Products/Debug-iphonesimulator/fittrack.app \
+            "$GITHUB_WORKSPACE/FitTrack-simulator.app.zip"
+
+      - name: Report build error
+        if: failure()
+        run: |
+          [ -f ios-build.log ] || exit 0
+          msg=$(tail -n 80 ios-build.log | python3 -c "import sys; print(sys.stdin.read().replace('%','%25').replace('\r','').replace('\n','%0A'))")
+          echo "::error title=iOS build failed (last 80 lines)::$msg"
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-log
+          path: ios-build.log
+
+      - name: Upload Simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: fittrack-ios-simulator
+          path: FitTrack-simulator.app.zip
+          if-no-files-found: error

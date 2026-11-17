@@ -29,6 +29,12 @@ python3 main.py
 # Build an Android APK (macOS/Linux)
 pip install buildozer && buildozer android debug
 
+# Build for iOS (macOS + Xcode)
+#   (run outside the app folder so build files aren't bundled into the app)
+pip install kivy-ios && mkdir ../ios-build && cd ../ios-build
+toolchain build kivy && toolchain create FitTrack "../fitness app"
+open fittrack-ios/fittrack.xcodeproj   # run on Simulator, or sign to run on an iPhone
+
 # Cost estimate from the measured code size
 python3 tools/cocomo.py
 ```
